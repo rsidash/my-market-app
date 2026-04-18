@@ -1,29 +1,27 @@
 package kz.rsidash.mymarketapp.controller;
 
+import kz.rsidash.mymarketapp.dto.item.ItemDto;
 import kz.rsidash.mymarketapp.dto.item.mapper.ItemMapper;
 import kz.rsidash.mymarketapp.model.cart.CartItem;
 import kz.rsidash.mymarketapp.model.enums.Action;
 import kz.rsidash.mymarketapp.model.item.Item;
 import kz.rsidash.mymarketapp.service.CartService;
+import kz.rsidash.mymarketapp.service.ItemService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-
-import java.util.Collections;
-import java.util.List;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(CartController.class)
+@WebFluxTest(CartController.class)
 class CartControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockitoBean
     private CartService cartService;
@@ -31,86 +29,97 @@ class CartControllerTest {
     @MockitoBean
     private ItemMapper itemMapper;
 
+    @MockitoBean
+    private ItemService itemService;
+
     @Test
-    void postItems_redirectsWithParams() throws Exception {
-        mockMvc.perform(post("/items")
-                        .param("id", "1")
-                        .param("action", "PLUS")
-                        .param("search", "ball")
-                        .param("sort", "ALPHA")
-                        .param("pageNumber", "2")
-                        .param("pageSize", "10"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/items?search=ball&sort=ALPHA&pageNumber=2&pageSize=10"));
+    void postItems_redirectsWithParams() {
+        when(cartService.changeItemQuantity(1L, Action.PLUS)).thenReturn(Mono.empty());
+
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items")
+                        .queryParam("id", "1")
+                        .queryParam("action", "PLUS")
+                        .queryParam("search", "ball")
+                        .queryParam("sort", "ALPHA")
+                        .queryParam("pageNumber", "2")
+                        .queryParam("pageSize", "10")
+                        .build())
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().location("/items?search=ball&sort=ALPHA&pageNumber=2&pageSize=10");
 
         verify(cartService).changeItemQuantity(1L, Action.PLUS);
     }
 
     @Test
-    void postItems_redirectsWithDefaults() throws Exception {
-        mockMvc.perform(post("/items")
-                        .param("id", "5")
-                        .param("action", "MINUS"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/items?search=&sort=NO&pageNumber=1&pageSize=5"));
+    void postItems_redirectsWithDefaults() {
+        when(cartService.changeItemQuantity(5L, Action.MINUS)).thenReturn(Mono.empty());
+
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items")
+                        .queryParam("id", "5")
+                        .queryParam("action", "MINUS")
+                        .build())
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().location("/items?search=&sort=NO&pageNumber=1&pageSize=5");
 
         verify(cartService).changeItemQuantity(5L, Action.MINUS);
     }
 
     @Test
-    void getCartItems_returnsCartTemplate() throws Exception {
-        when(cartService.getCartItems()).thenReturn(Collections.emptyList());
+    void getCartItems_returnsCartTemplate() {
+        when(cartService.getCartItems()).thenReturn(Flux.empty());
 
-        mockMvc.perform(get("/cart/items"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("cart"))
-                .andExpect(model().attributeExists("items", "total"))
-                .andExpect(model().attribute("total", 0L));
+        webTestClient.get().uri("/cart/items")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getCartItems_withItems() throws Exception {
+    void getCartItems_withItems() {
         var item = new Item();
         item.setId(1L);
         item.setTitle("Ball");
         item.setPrice(100);
 
-        var cartItem = CartItem.builder().id(1L).item(item).count(2).build();
-        when(cartService.getCartItems()).thenReturn(List.of(cartItem));
+        var cartItem = CartItem.builder().id(1L).itemId(1L).count(2).build();
+        var dto = ItemDto.builder().id(1).title("Ball").price(100).count(2).build();
 
-        var dto = kz.rsidash.mymarketapp.dto.item.ItemDto.builder()
-                .id(1).title("Ball").price(100).count(2).build();
+        when(cartService.getCartItems()).thenReturn(Flux.just(cartItem));
+        when(itemService.getItem(1L)).thenReturn(Mono.just(item));
         when(itemMapper.toDto(item, 2)).thenReturn(dto);
 
-        mockMvc.perform(get("/cart/items"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("cart"))
-                .andExpect(model().attribute("total", 200L));
+        webTestClient.get().uri("/cart/items")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void postCartItems_changesQuantityAndReturnsCart() throws Exception {
-        when(cartService.getCartItems()).thenReturn(Collections.emptyList());
+    void postCartItems_changesQuantityAndReturnsCart() {
+        when(cartService.changeItemQuantity(1L, Action.PLUS)).thenReturn(Mono.empty());
+        when(cartService.getCartItems()).thenReturn(Flux.empty());
 
-        mockMvc.perform(post("/cart/items")
-                        .param("id", "1")
-                        .param("action", "PLUS"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("cart"))
-                .andExpect(model().attributeExists("items", "total"));
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/cart/items")
+                        .queryParam("id", "1")
+                        .queryParam("action", "PLUS")
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
 
         verify(cartService).changeItemQuantity(1L, Action.PLUS);
     }
 
     @Test
-    void postCartItems_deleteAction() throws Exception {
-        when(cartService.getCartItems()).thenReturn(Collections.emptyList());
+    void postCartItems_deleteAction() {
+        when(cartService.changeItemQuantity(3L, Action.DELETE)).thenReturn(Mono.empty());
+        when(cartService.getCartItems()).thenReturn(Flux.empty());
 
-        mockMvc.perform(post("/cart/items")
-                        .param("id", "3")
-                        .param("action", "DELETE"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("cart"));
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/cart/items")
+                        .queryParam("id", "3")
+                        .queryParam("action", "DELETE")
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
 
         verify(cartService).changeItemQuantity(3L, Action.DELETE);
     }

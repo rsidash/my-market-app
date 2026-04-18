@@ -12,13 +12,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
-import java.util.Optional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,42 +35,45 @@ class CartServiceTest {
 
     @Test
     void getCartItems_returnsAll() {
-        var cartItem = CartItem.builder().id(1L).count(2).build();
-        when(cartItemRepository.findAll()).thenReturn(List.of(cartItem));
+        var cartItem = CartItem.builder().id(1L).itemId(1L).count(2).build();
+        when(cartItemRepository.findAll()).thenReturn(Flux.just(cartItem));
 
-        var result = cartService.getCartItems();
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getCount()).isEqualTo(2);
+        StepVerifier.create(cartService.getCartItems())
+                .assertNext(ci -> assertThat(ci.getCount()).isEqualTo(2))
+                .verifyComplete();
     }
 
     @Test
     void getCartItem_delegatesToRepository() {
-        var item = new Item();
-        item.setId(1L);
-        var cartItem = CartItem.builder().id(1L).item(item).count(3).build();
-        when(cartItemRepository.findByItemId(1L)).thenReturn(Optional.of(cartItem));
+        var cartItem = CartItem.builder().id(1L).itemId(1L).count(3).build();
+        when(cartItemRepository.findByItemId(1L)).thenReturn(Mono.just(cartItem));
 
-        var result = cartService.getCartItem(1L);
-
-        assertThat(result).isPresent();
-        assertThat(result.get().getCount()).isEqualTo(3);
+        StepVerifier.create(cartService.getCartItem(1L))
+                .assertNext(ci -> assertThat(ci.getCount()).isEqualTo(3))
+                .verifyComplete();
     }
 
     @Test
     void getCartItemsCountMap_returnsMap() {
-        var ci1 = CartItem.builder().id(1L).count(2).build();
-        var ci2 = CartItem.builder().id(2L).count(5).build();
-        when(cartItemRepository.findAll()).thenReturn(List.of(ci1, ci2));
+        var ci1 = CartItem.builder().id(1L).itemId(1L).count(2).build();
+        var ci2 = CartItem.builder().id(2L).itemId(2L).count(5).build();
+        when(cartItemRepository.findAll()).thenReturn(Flux.just(ci1, ci2));
 
-        var map = cartService.getCartItemsCountMap();
-
-        assertThat(map).containsEntry(1L, 2).containsEntry(2L, 5);
+        StepVerifier.create(cartService.getCartItemsCountMap())
+                .assertNext(map -> {
+                    assertThat(map).containsEntry(1L, 2);
+                    assertThat(map).containsEntry(2L, 5);
+                })
+                .verifyComplete();
     }
 
     @Test
     void clean_deletesAll() {
-        cartService.clean();
+        when(cartItemRepository.deleteAll()).thenReturn(Mono.empty());
+
+        StepVerifier.create(cartService.clean())
+                .verifyComplete();
+
         verify(cartItemRepository).deleteAll();
     }
 
@@ -78,24 +81,30 @@ class CartServiceTest {
     void changeItemQuantity_plus_newItem() {
         var item = new Item();
         item.setId(1L);
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
-        when(cartItemRepository.findByItemId(1L)).thenReturn(Optional.empty());
+        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(cartItemRepository.findByItemId(1L)).thenReturn(Mono.empty());
+        when(cartItemRepository.save(any(CartItem.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        cartService.changeItemQuantity(1L, Action.PLUS);
+        StepVerifier.create(cartService.changeItemQuantity(1L, Action.PLUS))
+                .expectNextCount(1)
+                .verifyComplete();
 
-        verify(cartItemRepository).save(argThat(ci -> ci.getCount() == 1 && ci.getItem() == item));
+        verify(cartItemRepository).save(argThat(ci -> ci.getCount() == 1 && ci.getItemId() == 1L));
     }
 
     @Test
     void changeItemQuantity_plus_existingItem() {
         var item = new Item();
         item.setId(1L);
-        var cartItem = CartItem.builder().id(1L).item(item).count(2).build();
+        var cartItem = CartItem.builder().id(1L).itemId(1L).count(2).build();
 
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
-        when(cartItemRepository.findByItemId(1L)).thenReturn(Optional.of(cartItem));
+        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(cartItemRepository.findByItemId(1L)).thenReturn(Mono.just(cartItem));
+        when(cartItemRepository.save(any(CartItem.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        cartService.changeItemQuantity(1L, Action.PLUS);
+        StepVerifier.create(cartService.changeItemQuantity(1L, Action.PLUS))
+                .expectNextCount(1)
+                .verifyComplete();
 
         verify(cartItemRepository).save(argThat(ci -> ci.getCount() == 3));
     }
@@ -104,12 +113,15 @@ class CartServiceTest {
     void changeItemQuantity_minus_decreasesCount() {
         var item = new Item();
         item.setId(1L);
-        var cartItem = CartItem.builder().id(1L).item(item).count(3).build();
+        var cartItem = CartItem.builder().id(1L).itemId(1L).count(3).build();
 
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
-        when(cartItemRepository.findByItemId(1L)).thenReturn(Optional.of(cartItem));
+        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(cartItemRepository.findByItemId(1L)).thenReturn(Mono.just(cartItem));
+        when(cartItemRepository.save(any(CartItem.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        cartService.changeItemQuantity(1L, Action.MINUS);
+        StepVerifier.create(cartService.changeItemQuantity(1L, Action.MINUS))
+                .expectNextCount(1)
+                .verifyComplete();
 
         verify(cartItemRepository).save(argThat(ci -> ci.getCount() == 2));
     }
@@ -118,12 +130,15 @@ class CartServiceTest {
     void changeItemQuantity_minus_toZero_deletes() {
         var item = new Item();
         item.setId(1L);
-        var cartItem = CartItem.builder().id(1L).item(item).count(1).build();
+        var cartItem = CartItem.builder().id(1L).itemId(1L).count(1).build();
 
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
-        when(cartItemRepository.findByItemId(1L)).thenReturn(Optional.of(cartItem));
+        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(cartItemRepository.findByItemId(1L)).thenReturn(Mono.just(cartItem));
+        when(cartItemRepository.delete(cartItem)).thenReturn(Mono.empty());
 
-        cartService.changeItemQuantity(1L, Action.MINUS);
+        StepVerifier.create(cartService.changeItemQuantity(1L, Action.MINUS))
+                .expectNextCount(1)
+                .verifyComplete();
 
         verify(cartItemRepository).delete(cartItem);
         verify(cartItemRepository, never()).save(any());
@@ -133,23 +148,27 @@ class CartServiceTest {
     void changeItemQuantity_minus_nonExisting_throwsValidation() {
         var item = new Item();
         item.setId(1L);
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
-        when(cartItemRepository.findByItemId(1L)).thenReturn(Optional.empty());
+        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(cartItemRepository.findByItemId(1L)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> cartService.changeItemQuantity(1L, Action.MINUS))
-                .isInstanceOf(ValidationException.class);
+        StepVerifier.create(cartService.changeItemQuantity(1L, Action.MINUS))
+                .expectError(ValidationException.class)
+                .verify();
     }
 
     @Test
     void changeItemQuantity_delete_removesItem() {
         var item = new Item();
         item.setId(1L);
-        var cartItem = CartItem.builder().id(1L).item(item).count(5).build();
+        var cartItem = CartItem.builder().id(1L).itemId(1L).count(5).build();
 
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
-        when(cartItemRepository.findByItemId(1L)).thenReturn(Optional.of(cartItem));
+        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(cartItemRepository.findByItemId(1L)).thenReturn(Mono.just(cartItem));
+        when(cartItemRepository.delete(cartItem)).thenReturn(Mono.empty());
 
-        cartService.changeItemQuantity(1L, Action.DELETE);
+        StepVerifier.create(cartService.changeItemQuantity(1L, Action.DELETE))
+                .expectNextCount(1)
+                .verifyComplete();
 
         verify(cartItemRepository).delete(cartItem);
     }
@@ -158,18 +177,20 @@ class CartServiceTest {
     void changeItemQuantity_delete_nonExisting_throwsValidation() {
         var item = new Item();
         item.setId(1L);
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
-        when(cartItemRepository.findByItemId(1L)).thenReturn(Optional.empty());
+        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(cartItemRepository.findByItemId(1L)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> cartService.changeItemQuantity(1L, Action.DELETE))
-                .isInstanceOf(ValidationException.class);
+        StepVerifier.create(cartService.changeItemQuantity(1L, Action.DELETE))
+                .expectError(ValidationException.class)
+                .verify();
     }
 
     @Test
     void changeItemQuantity_itemNotFound_throwsNotFound() {
-        when(itemRepository.findById(999L)).thenReturn(Optional.empty());
+        when(itemRepository.findById(999L)).thenReturn(Mono.empty());
 
-        assertThatThrownBy(() -> cartService.changeItemQuantity(999L, Action.PLUS))
-                .isInstanceOf(NotFoundException.class);
+        StepVerifier.create(cartService.changeItemQuantity(999L, Action.PLUS))
+                .expectError(NotFoundException.class)
+                .verify();
     }
 }

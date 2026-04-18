@@ -53,10 +53,10 @@ class MapperTest {
 
         var orderItem = new OrderItem();
         orderItem.setId(10L);
-        orderItem.setItem(item);
+        orderItem.setItemId(1L);
         orderItem.setCount(2);
 
-        var dto = orderItemMapper.toDto(orderItem);
+        var dto = orderItemMapper.toDto(orderItem, item);
 
         assertThat(dto.getId()).isEqualTo(10L);
         assertThat(dto.getTitle()).isEqualTo("Ball");
@@ -68,10 +68,10 @@ class MapperTest {
     void orderItemMapper_mapsWithNullItem() {
         var orderItem = new OrderItem();
         orderItem.setId(10L);
-        orderItem.setItem(null);
+        orderItem.setItemId(1L);
         orderItem.setCount(1);
 
-        var dto = orderItemMapper.toDto(orderItem);
+        var dto = orderItemMapper.toDto(orderItem, null);
 
         assertThat(dto.getId()).isEqualTo(10L);
         assertThat(dto.getTitle()).isNull();

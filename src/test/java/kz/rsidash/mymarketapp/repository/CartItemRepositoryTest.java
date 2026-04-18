@@ -1,81 +1,62 @@
 package kz.rsidash.mymarketapp.repository;
 
 import kz.rsidash.mymarketapp.model.cart.CartItem;
-import kz.rsidash.mymarketapp.model.item.Item;
 import kz.rsidash.mymarketapp.repostitory.CartItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.boot.data.r2dbc.test.autoconfigure.DataR2dbcTest;
+import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DataJpaTest
+@DataR2dbcTest
 class CartItemRepositoryTest {
-
-    @Autowired
-    private TestEntityManager em;
 
     @Autowired
     private CartItemRepository cartItemRepository;
 
-    private Item item;
-
     @BeforeEach
     void setUp() {
-        item = new Item();
-        item.setTitle("Ball");
-        item.setPrice(100);
-        em.persist(item);
-        em.flush();
+        cartItemRepository.deleteAll().block();
     }
 
     @Test
     void findByItemId_found() {
-        var cartItem = CartItem.builder().item(item).count(3).build();
-        em.persist(cartItem);
-        em.flush();
+        var cartItem = CartItem.builder().itemId(1L).count(3).build();
+        cartItemRepository.save(cartItem).block();
 
-        var result = cartItemRepository.findByItemId(item.getId());
-
-        assertThat(result).isPresent();
-        assertThat(result.get().getCount()).isEqualTo(3);
-        assertThat(result.get().getItem().getId()).isEqualTo(item.getId());
+        StepVerifier.create(cartItemRepository.findByItemId(1L))
+                .assertNext(ci -> {
+                    assertThat(ci.getCount()).isEqualTo(3);
+                    assertThat(ci.getItemId()).isEqualTo(1L);
+                })
+                .verifyComplete();
     }
 
     @Test
     void findByItemId_notFound() {
-        var result = cartItemRepository.findByItemId(999L);
-        assertThat(result).isEmpty();
+        StepVerifier.create(cartItemRepository.findByItemId(999L))
+                .verifyComplete();
     }
 
     @Test
     void findAll_returnsAllCartItems() {
-        var ci1 = CartItem.builder().item(item).count(2).build();
-        em.persist(ci1);
+        cartItemRepository.save(CartItem.builder().itemId(1L).count(2).build()).block();
+        cartItemRepository.save(CartItem.builder().itemId(2L).count(1).build()).block();
 
-        var item2 = new Item();
-        item2.setTitle("Bat");
-        item2.setPrice(200);
-        em.persist(item2);
-
-        var ci2 = CartItem.builder().item(item2).count(1).build();
-        em.persist(ci2);
-        em.flush();
-
-        var result = cartItemRepository.findAll();
-        assertThat(result).hasSize(2);
+        StepVerifier.create(cartItemRepository.findAll())
+                .expectNextCount(2)
+                .verifyComplete();
     }
 
     @Test
     void deleteAll_clearsCart() {
-        var cartItem = CartItem.builder().item(item).count(1).build();
-        em.persist(cartItem);
-        em.flush();
+        cartItemRepository.save(CartItem.builder().itemId(1L).count(1).build()).block();
 
-        cartItemRepository.deleteAll();
+        cartItemRepository.deleteAll().block();
 
-        assertThat(cartItemRepository.findAll()).isEmpty();
+        StepVerifier.create(cartItemRepository.findAll())
+                .verifyComplete();
     }
 }

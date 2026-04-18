@@ -12,16 +12,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,18 +44,19 @@ class ItemFacadeTest {
         item.setTitle("Ball");
         item.setPrice(100);
 
-        var page = new PageImpl<>(List.of(item), PageRequest.of(0, 5), 1);
-        when(itemService.getItems(any(), any(), any())).thenReturn(page);
-        when(cartService.getCartItemsCountMap()).thenReturn(Map.of(1L, 3));
+        when(itemService.getItems(any(), any())).thenReturn(Flux.just(item));
+        when(cartService.getCartItemsCountMap()).thenReturn(Mono.just(Map.of(1L, 3)));
 
-        var result = itemFacade.getItems(null, SortType.NO, 0, 5);
-
-        assertThat(result.getItems()).hasSize(1);
-        assertThat(result.getItems().get(0).getCount()).isEqualTo(3);
-        assertThat(result.getPaging().getPageNumber()).isEqualTo(1);
-        assertThat(result.getPaging().getPageSize()).isEqualTo(5);
-        assertThat(result.getPaging().isHasPrevious()).isFalse();
-        assertThat(result.getPaging().isHasNext()).isFalse();
+        StepVerifier.create(itemFacade.getItems(null, SortType.NO, 0, 5))
+                .assertNext(result -> {
+                    assertThat(result.getItems()).hasSize(1);
+                    assertThat(result.getItems().get(0).getCount()).isEqualTo(3);
+                    assertThat(result.getPaging().getPageNumber()).isEqualTo(1);
+                    assertThat(result.getPaging().getPageSize()).isEqualTo(5);
+                    assertThat(result.getPaging().isHasPrevious()).isFalse();
+                    assertThat(result.getPaging().isHasNext()).isFalse();
+                })
+                .verifyComplete();
     }
 
     @Test
@@ -67,13 +66,12 @@ class ItemFacadeTest {
         item.setTitle("Ball");
         item.setPrice(100);
 
-        var page = new PageImpl<>(List.of(item), PageRequest.of(0, 5), 1);
-        when(itemService.getItems(any(), any(), any())).thenReturn(page);
-        when(cartService.getCartItemsCountMap()).thenReturn(Map.of());
+        when(itemService.getItems(any(), any())).thenReturn(Flux.just(item));
+        when(cartService.getCartItemsCountMap()).thenReturn(Mono.just(Map.of()));
 
-        var result = itemFacade.getItems(null, SortType.NO, 0, 5);
-
-        assertThat(result.getItems().get(0).getCount()).isZero();
+        StepVerifier.create(itemFacade.getItems(null, SortType.NO, 0, 5))
+                .assertNext(result -> assertThat(result.getItems().get(0).getCount()).isZero())
+                .verifyComplete();
     }
 
     @Test
@@ -83,15 +81,14 @@ class ItemFacadeTest {
         item.setTitle("Ball");
         item.setPrice(100);
 
-        var cartItem = CartItem.builder().id(1L).item(item).count(2).build();
+        var cartItem = CartItem.builder().id(1L).itemId(1L).count(2).build();
 
-        when(itemService.getItem(1L)).thenReturn(Optional.of(item));
-        when(cartService.getCartItem(1L)).thenReturn(Optional.of(cartItem));
+        when(itemService.getItem(1L)).thenReturn(Mono.just(item));
+        when(cartService.getCartItem(1L)).thenReturn(Mono.just(cartItem));
 
-        var result = itemFacade.getItem(1L);
-
-        assertThat(result).isPresent();
-        assertThat(result.get().getCount()).isEqualTo(2);
+        StepVerifier.create(itemFacade.getItem(1L))
+                .assertNext(dto -> assertThat(dto.getCount()).isEqualTo(2))
+                .verifyComplete();
     }
 
     @Test
@@ -101,21 +98,20 @@ class ItemFacadeTest {
         item.setTitle("Ball");
         item.setPrice(100);
 
-        when(itemService.getItem(1L)).thenReturn(Optional.of(item));
-        when(cartService.getCartItem(1L)).thenReturn(Optional.empty());
+        when(itemService.getItem(1L)).thenReturn(Mono.just(item));
+        when(cartService.getCartItem(1L)).thenReturn(Mono.empty());
 
-        var result = itemFacade.getItem(1L);
-
-        assertThat(result).isPresent();
-        assertThat(result.get().getCount()).isZero();
+        StepVerifier.create(itemFacade.getItem(1L))
+                .assertNext(dto -> assertThat(dto.getCount()).isZero())
+                .verifyComplete();
     }
 
     @Test
     void getItem_notFound() {
-        when(itemService.getItem(999L)).thenReturn(Optional.empty());
+        when(itemService.getItem(999L)).thenReturn(Mono.empty());
+        when(cartService.getCartItem(999L)).thenReturn(Mono.empty());
 
-        var result = itemFacade.getItem(999L);
-
-        assertThat(result).isEmpty();
+        StepVerifier.create(itemFacade.getItem(999L))
+                .verifyComplete();
     }
 }

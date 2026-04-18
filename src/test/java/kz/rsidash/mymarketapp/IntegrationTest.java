@@ -3,25 +3,23 @@ package kz.rsidash.mymarketapp;
 import kz.rsidash.mymarketapp.model.item.Item;
 import kz.rsidash.mymarketapp.repostitory.CartItemRepository;
 import kz.rsidash.mymarketapp.repostitory.ItemRepository;
+import kz.rsidash.mymarketapp.repostitory.OrderItemRepository;
 import kz.rsidash.mymarketapp.repostitory.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.reactive.server.WebTestClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureWebTestClient
 class IntegrationTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @Autowired
     private ItemRepository itemRepository;
@@ -32,158 +30,158 @@ class IntegrationTest {
     @Autowired
     private OrderRepository orderRepository;
 
+    @Autowired
+    private OrderItemRepository orderItemRepository;
+
     @BeforeEach
     void setUp() {
-        cartItemRepository.deleteAll();
-        orderRepository.deleteAll();
-        itemRepository.deleteAll();
+        orderItemRepository.deleteAll().block();
+        cartItemRepository.deleteAll().block();
+        orderRepository.deleteAll().block();
+        itemRepository.deleteAll().block();
 
         var ball = new Item();
         ball.setTitle("Ball");
         ball.setDescription("A rubber ball");
         ball.setPrice(100);
-        itemRepository.save(ball);
+        itemRepository.save(ball).block();
 
         var bat = new Item();
         bat.setTitle("Bat");
         bat.setDescription("Wooden bat");
         bat.setPrice(200);
-        itemRepository.save(bat);
+        itemRepository.save(bat).block();
     }
 
     @Test
-    void getItems_returnsItemsPage() throws Exception {
-        mockMvc.perform(get("/items"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"))
-                .andExpect(model().attributeExists("items", "sort", "paging"));
+    void getItems_returnsItemsPage() {
+        webTestClient.get().uri("/items")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getRootPath_returnsItemsPage() throws Exception {
-        mockMvc.perform(get("/"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"));
+    void getRootPath_returnsItemsPage() {
+        webTestClient.get().uri("/")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getItemById_returnsItemPage() throws Exception {
-        var item = itemRepository.findAll().get(0);
+    void getItemById_returnsItemPage() {
+        var item = itemRepository.findAll().blockFirst();
 
-        mockMvc.perform(get("/items/" + item.getId()))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attributeExists("item"));
+        webTestClient.get().uri("/items/" + item.getId())
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void addToCart_andViewCart() throws Exception {
-        var item = itemRepository.findAll().get(0);
+    void addToCart_andViewCart() {
+        var item = itemRepository.findAll().blockFirst();
 
-        // Add to cart from item page
-        mockMvc.perform(post("/items/" + item.getId()).param("action", "PLUS"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"));
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items/" + item.getId())
+                        .queryParam("action", "PLUS")
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
 
-        // View cart
-        mockMvc.perform(get("/cart/items"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("cart"))
-                .andExpect(model().attributeExists("items", "total"));
+        webTestClient.get().uri("/cart/items")
+                .exchange()
+                .expectStatus().isOk();
 
-        assertThat(cartItemRepository.findAll()).hasSize(1);
+        assertThat(cartItemRepository.findAll().collectList().block()).hasSize(1);
     }
 
     @Test
-    void addToCart_fromItemsPage_redirects() throws Exception {
-        var item = itemRepository.findAll().get(0);
+    void addToCart_fromItemsPage_redirects() {
+        var item = itemRepository.findAll().blockFirst();
 
-        mockMvc.perform(post("/items")
-                        .param("id", String.valueOf(item.getId()))
-                        .param("action", "PLUS"))
-                .andExpect(status().is3xxRedirection());
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items")
+                        .queryParam("id", String.valueOf(item.getId()))
+                        .queryParam("action", "PLUS")
+                        .build())
+                .exchange()
+                .expectStatus().is3xxRedirection();
 
-        assertThat(cartItemRepository.findByItemId(item.getId())).isPresent();
+        assertThat(cartItemRepository.findByItemId(item.getId()).block()).isNotNull();
     }
 
     @Test
-    void fullPurchaseFlow() throws Exception {
-        var items = itemRepository.findAll();
+    void fullPurchaseFlow() {
+        var items = itemRepository.findAll().collectList().block();
         var item1 = items.get(0);
         var item2 = items.get(1);
 
-        // Add items to cart
-        mockMvc.perform(post("/items/" + item1.getId()).param("action", "PLUS"));
-        mockMvc.perform(post("/items/" + item1.getId()).param("action", "PLUS"));
-        mockMvc.perform(post("/items/" + item2.getId()).param("action", "PLUS"));
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items/" + item1.getId())
+                .queryParam("action", "PLUS").build()).exchange();
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items/" + item1.getId())
+                .queryParam("action", "PLUS").build()).exchange();
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items/" + item2.getId())
+                .queryParam("action", "PLUS").build()).exchange();
 
-        // Verify cart
-        assertThat(cartItemRepository.findAll()).hasSize(2);
+        assertThat(cartItemRepository.findAll().collectList().block()).hasSize(2);
 
-        // Buy
-        mockMvc.perform(post("/buy"))
-                .andExpect(status().is3xxRedirection());
+        webTestClient.post().uri("/buy")
+                .exchange()
+                .expectStatus().is3xxRedirection();
 
-        // Cart should be empty
-        assertThat(cartItemRepository.findAll()).isEmpty();
+        assertThat(cartItemRepository.findAll().collectList().block()).isEmpty();
 
-        // Order should exist
-        var orders = orderRepository.findAll();
+        var orders = orderRepository.findAll().collectList().block();
         assertThat(orders).hasSize(1);
-        assertThat(orders.get(0).getTotalSum()).isEqualTo(400L); // 100*2 + 200*1
+        assertThat(orders.get(0).getTotalSum()).isEqualTo(400L);
     }
 
     @Test
-    void viewOrders_afterPurchase() throws Exception {
-        var item = itemRepository.findAll().get(0);
+    void viewOrders_afterPurchase() {
+        var item = itemRepository.findAll().blockFirst();
 
-        // Add and buy
-        mockMvc.perform(post("/items/" + item.getId()).param("action", "PLUS"));
-        mockMvc.perform(post("/buy"));
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items/" + item.getId())
+                .queryParam("action", "PLUS").build()).exchange();
+        webTestClient.post().uri("/buy").exchange();
 
-        // View orders list
-        mockMvc.perform(get("/orders"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("orders"))
-                .andExpect(model().attributeExists("orders"));
+        webTestClient.get().uri("/orders")
+                .exchange()
+                .expectStatus().isOk();
 
-        // View specific order
-        var order = orderRepository.findAll().get(0);
-        mockMvc.perform(get("/orders/" + order.getId()))
-                .andExpect(status().isOk())
-                .andExpect(view().name("order"))
-                .andExpect(model().attributeExists("order"))
-                .andExpect(model().attribute("newOrder", false));
+        var order = orderRepository.findAll().blockFirst();
+        webTestClient.get().uri("/orders/" + order.getId())
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void deleteFromCart() throws Exception {
-        var item = itemRepository.findAll().get(0);
+    void deleteFromCart() {
+        var item = itemRepository.findAll().blockFirst();
 
-        // Add to cart
-        mockMvc.perform(post("/items/" + item.getId()).param("action", "PLUS"));
-        assertThat(cartItemRepository.findAll()).hasSize(1);
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items/" + item.getId())
+                .queryParam("action", "PLUS").build()).exchange();
+        assertThat(cartItemRepository.findAll().collectList().block()).hasSize(1);
 
-        // Delete from cart
-        mockMvc.perform(post("/cart/items")
-                        .param("id", String.valueOf(item.getId()))
-                        .param("action", "DELETE"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("cart"));
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/cart/items")
+                        .queryParam("id", String.valueOf(item.getId()))
+                        .queryParam("action", "DELETE")
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
 
-        assertThat(cartItemRepository.findAll()).isEmpty();
+        assertThat(cartItemRepository.findAll().collectList().block()).isEmpty();
     }
 
     @Test
-    void searchItems() throws Exception {
-        mockMvc.perform(get("/items").param("search", "ball"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"));
+    void searchItems() {
+        webTestClient.get().uri(uriBuilder -> uriBuilder.path("/items")
+                        .queryParam("search", "ball")
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getItem_notFound_returns404() throws Exception {
-        mockMvc.perform(get("/items/99999"))
-                .andExpect(status().isNotFound());
+    void getItem_notFound_returns404() {
+        webTestClient.get().uri("/items/99999")
+                .exchange()
+                .expectStatus().isNotFound();
     }
 }

@@ -1,29 +1,34 @@
 package kz.rsidash.mymarketapp.controller;
 
 import kz.rsidash.mymarketapp.dto.order.OrderDto;
+import kz.rsidash.mymarketapp.dto.order.OrderItemDto;
+import kz.rsidash.mymarketapp.dto.order.mapper.OrderItemMapper;
 import kz.rsidash.mymarketapp.dto.order.mapper.OrderMapper;
+import kz.rsidash.mymarketapp.model.item.Item;
 import kz.rsidash.mymarketapp.model.order.Order;
+import kz.rsidash.mymarketapp.model.order.OrderItem;
+import kz.rsidash.mymarketapp.repostitory.ItemRepository;
 import kz.rsidash.mymarketapp.service.OrderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(OrderController.class)
+@WebFluxTest(OrderController.class)
 class OrderControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockitoBean
     private OrderService orderService;
@@ -31,88 +36,107 @@ class OrderControllerTest {
     @MockitoBean
     private OrderMapper orderMapper;
 
-    @Test
-    void getOrders_returnsOrdersTemplate() throws Exception {
-        when(orderService.getOrders()).thenReturn(Collections.emptyList());
+    @MockitoBean
+    private OrderItemMapper orderItemMapper;
 
-        mockMvc.perform(get("/orders"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("orders"))
-                .andExpect(model().attributeExists("orders"));
+    @MockitoBean
+    private ItemRepository itemRepository;
+
+    @Test
+    void getOrders_returnsOrdersTemplate() {
+        when(orderService.getOrders()).thenReturn(Flux.empty());
+
+        webTestClient.get().uri("/orders")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getOrders_withOrders() throws Exception {
+    void getOrders_withOrders() {
         var order = new Order();
         order.setId(1L);
         order.setTotalSum(500L);
-        order.setItems(Collections.emptyList());
 
-        var dto = OrderDto.builder().id(1).items(Collections.emptyList()).totalSum(500).build();
+        var orderItem = new OrderItem();
+        orderItem.setId(1L);
+        orderItem.setOrderId(1L);
+        orderItem.setItemId(10L);
+        orderItem.setCount(2);
 
-        when(orderService.getOrders()).thenReturn(List.of(order));
-        when(orderMapper.toDto(order)).thenReturn(dto);
+        var item = new Item();
+        item.setId(10L);
+        item.setTitle("Ball");
+        item.setPrice(250);
 
-        mockMvc.perform(get("/orders"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("orders"))
-                .andExpect(model().attribute("orders", List.of(dto)));
+        var orderItemDto = OrderItemDto.builder().id(1).title("Ball").price(250).count(2).build();
+        var dto = OrderDto.builder().id(1).items(List.of(orderItemDto)).totalSum(500).build();
+
+        when(orderService.getOrders()).thenReturn(Flux.just(order));
+        when(orderService.getOrderItems(1L)).thenReturn(Flux.just(orderItem));
+        when(itemRepository.findById(10L)).thenReturn(Mono.just(item));
+        when(orderItemMapper.toDto(orderItem, item)).thenReturn(orderItemDto);
+        when(orderMapper.toDto(eq(order), any())).thenReturn(dto);
+
+        webTestClient.get().uri("/orders")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getOrderById_returnsOrderTemplate() throws Exception {
+    void getOrderById_returnsOrderTemplate() {
         var order = new Order();
         order.setId(1L);
         order.setTotalSum(300L);
-        order.setItems(Collections.emptyList());
 
         var dto = OrderDto.builder().id(1).items(Collections.emptyList()).totalSum(300).build();
 
-        when(orderService.getOrder(1L)).thenReturn(Optional.of(order));
-        when(orderMapper.toDto(order)).thenReturn(dto);
+        when(orderService.getOrder(1L)).thenReturn(Mono.just(order));
+        when(orderService.getOrderItems(1L)).thenReturn(Flux.empty());
+        when(orderMapper.toDto(eq(order), any())).thenReturn(dto);
 
-        mockMvc.perform(get("/orders/1"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("order"))
-                .andExpect(model().attribute("order", dto))
-                .andExpect(model().attribute("newOrder", false));
+        webTestClient.get().uri("/orders/1")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getOrderById_withNewOrderTrue() throws Exception {
+    void getOrderById_withNewOrderTrue() {
         var order = new Order();
         order.setId(1L);
         order.setTotalSum(300L);
-        order.setItems(Collections.emptyList());
 
         var dto = OrderDto.builder().id(1).items(Collections.emptyList()).totalSum(300).build();
 
-        when(orderService.getOrder(1L)).thenReturn(Optional.of(order));
-        when(orderMapper.toDto(order)).thenReturn(dto);
+        when(orderService.getOrder(1L)).thenReturn(Mono.just(order));
+        when(orderService.getOrderItems(1L)).thenReturn(Flux.empty());
+        when(orderMapper.toDto(eq(order), any())).thenReturn(dto);
 
-        mockMvc.perform(get("/orders/1").param("newOrder", "true"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("order"))
-                .andExpect(model().attribute("newOrder", true));
+        webTestClient.get().uri(uriBuilder -> uriBuilder.path("/orders/1")
+                        .queryParam("newOrder", "true")
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getOrderById_notFound() throws Exception {
-        when(orderService.getOrder(999L)).thenReturn(Optional.empty());
+    void getOrderById_notFound() {
+        when(orderService.getOrder(999L)).thenReturn(Mono.empty());
 
-        mockMvc.perform(get("/orders/999"))
-                .andExpect(status().isNotFound());
+        webTestClient.get().uri("/orders/999")
+                .exchange()
+                .expectStatus().isNotFound();
     }
 
     @Test
-    void buy_redirectsToOrder() throws Exception {
+    void buy_redirectsToOrder() {
         var order = new Order();
         order.setId(42L);
 
-        when(orderService.createOrder()).thenReturn(order);
+        when(orderService.createOrder()).thenReturn(Mono.just(order));
 
-        mockMvc.perform(post("/buy"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/orders/42?newOrder=true"));
+        webTestClient.post().uri("/buy")
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().location("/orders/42?newOrder=true");
     }
 }

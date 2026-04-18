@@ -8,14 +8,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.*;
-
-import java.util.List;
-import java.util.Optional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,81 +26,98 @@ class ItemServiceTest {
 
     @Test
     void getItems_noSearch_callsFindAll() {
-        var pageable = PageRequest.of(0, 5);
-        when(itemRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+        when(itemRepository.findAll()).thenReturn(Flux.empty());
 
-        itemService.getItems(null, SortType.NO, pageable);
+        StepVerifier.create(itemService.getItems(null, SortType.NO))
+                .verifyComplete();
 
-        verify(itemRepository).findAll(any(Pageable.class));
-        verify(itemRepository, never()).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(any(), any(), any());
+        verify(itemRepository).findAll();
+        verify(itemRepository, never()).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(any(), any());
     }
 
     @Test
     void getItems_withSearch_callsSearchMethod() {
-        var pageable = PageRequest.of(0, 5);
-        when(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-                eq("ball"), eq("ball"), any(Pageable.class))).thenReturn(Page.empty());
+        var item = new Item();
+        item.setId(1L);
+        item.setTitle("Ball");
+        item.setPrice(100);
 
-        itemService.getItems("ball", SortType.NO, pageable);
+        when(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("ball", "ball"))
+                .thenReturn(Flux.just(item));
 
-        verify(itemRepository).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-                eq("ball"), eq("ball"), any(Pageable.class));
+        StepVerifier.create(itemService.getItems("ball", SortType.NO))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        verify(itemRepository).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("ball", "ball");
     }
 
     @Test
     void getItems_blankSearch_callsFindAll() {
-        var pageable = PageRequest.of(0, 5);
-        when(itemRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+        when(itemRepository.findAll()).thenReturn(Flux.empty());
 
-        itemService.getItems("  ", SortType.NO, pageable);
+        StepVerifier.create(itemService.getItems("  ", SortType.NO))
+                .verifyComplete();
 
-        verify(itemRepository).findAll(any(Pageable.class));
+        verify(itemRepository).findAll();
     }
 
     @Test
-    void getItems_sortAlpha_appliesTitleSort() {
-        var pageable = PageRequest.of(0, 5);
-        var item = new Item();
-        item.setId(1L);
-        item.setTitle("A");
-        when(itemRepository.findAll(any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(item)));
+    void getItems_sortAlpha_sortsByTitle() {
+        var itemB = new Item();
+        itemB.setId(1L);
+        itemB.setTitle("Bat");
+        itemB.setPrice(200);
 
-        var result = itemService.getItems(null, SortType.ALPHA, pageable);
+        var itemA = new Item();
+        itemA.setId(2L);
+        itemA.setTitle("Apple");
+        itemA.setPrice(50);
 
-        verify(itemRepository).findAll(argThat((Pageable p) ->
-                p.getSort().getOrderFor("title") != null));
+        when(itemRepository.findAll()).thenReturn(Flux.just(itemB, itemA));
+
+        StepVerifier.create(itemService.getItems(null, SortType.ALPHA))
+                .assertNext(i -> assertThat(i.getTitle()).isEqualTo("Apple"))
+                .assertNext(i -> assertThat(i.getTitle()).isEqualTo("Bat"))
+                .verifyComplete();
     }
 
     @Test
-    void getItems_sortPrice_appliesPriceSort() {
-        var pageable = PageRequest.of(0, 5);
-        when(itemRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+    void getItems_sortPrice_sortsByPrice() {
+        var expensive = new Item();
+        expensive.setId(1L);
+        expensive.setTitle("Bat");
+        expensive.setPrice(200);
 
-        itemService.getItems(null, SortType.PRICE, pageable);
+        var cheap = new Item();
+        cheap.setId(2L);
+        cheap.setTitle("Ball");
+        cheap.setPrice(50);
 
-        verify(itemRepository).findAll(argThat((Pageable p) ->
-                p.getSort().getOrderFor("price") != null));
+        when(itemRepository.findAll()).thenReturn(Flux.just(expensive, cheap));
+
+        StepVerifier.create(itemService.getItems(null, SortType.PRICE))
+                .assertNext(i -> assertThat(i.getPrice()).isEqualTo(50))
+                .assertNext(i -> assertThat(i.getPrice()).isEqualTo(200))
+                .verifyComplete();
     }
 
     @Test
     void getItem_found() {
         var item = new Item();
         item.setId(1L);
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
 
-        var result = itemService.getItem(1L);
-
-        assertThat(result).isPresent();
-        assertThat(result.get().getId()).isEqualTo(1L);
+        StepVerifier.create(itemService.getItem(1L))
+                .assertNext(i -> assertThat(i.getId()).isEqualTo(1L))
+                .verifyComplete();
     }
 
     @Test
     void getItem_notFound() {
-        when(itemRepository.findById(999L)).thenReturn(Optional.empty());
+        when(itemRepository.findById(999L)).thenReturn(Mono.empty());
 
-        var result = itemService.getItem(999L);
-
-        assertThat(result).isEmpty();
+        StepVerifier.create(itemService.getItem(999L))
+                .verifyComplete();
     }
 }
