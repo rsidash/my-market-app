@@ -6,12 +6,16 @@ import kz.rsidash.mymarketapp.dto.item.ItemListView;
 import kz.rsidash.mymarketapp.dto.item.mapper.ItemMapper;
 import kz.rsidash.mymarketapp.model.cart.CartItem;
 import kz.rsidash.mymarketapp.model.enums.SortType;
+import kz.rsidash.mymarketapp.model.item.Item;
 import kz.rsidash.mymarketapp.service.CartService;
 import kz.rsidash.mymarketapp.service.ItemService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Component
@@ -27,15 +31,15 @@ public class ItemFacade {
             int pageNumber,
             int pageSize
     ) {
-        final var itemPage = itemService.getItems(
+        final Page<Item> itemPage = itemService.getItems(
                 search,
                 sortType,
                 PageRequest.of(pageNumber, pageSize)
         );
 
-        final var cartMap = cartService.getCartItemsCountMap();
+        final Map<Long, Integer> cartMap = cartService.getCartItemsCountMap();
 
-        final var items = itemPage.map(i ->
+        final List<ItemDto> items = itemPage.map(i ->
                 itemMapper.toDto(i, cartMap.getOrDefault(i.getId(), 0))
         ).getContent();
 
@@ -55,7 +59,7 @@ public class ItemFacade {
     public Optional<ItemDto> getItem(Long id) {
         return itemService.getItem(id)
                 .map(i -> {
-                    final var count = cartService.getCartItem(id)
+                    final Integer count = cartService.getCartItem(id)
                             .map(CartItem::getCount)
                             .orElse(0);
 

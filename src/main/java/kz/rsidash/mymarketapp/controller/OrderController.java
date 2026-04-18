@@ -1,7 +1,9 @@
 package kz.rsidash.mymarketapp.controller;
 
 import jakarta.validation.constraints.Positive;
+import kz.rsidash.mymarketapp.dto.order.OrderDto;
 import kz.rsidash.mymarketapp.dto.order.mapper.OrderMapper;
+import kz.rsidash.mymarketapp.model.order.Order;
 import kz.rsidash.mymarketapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +16,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+
 @Controller
 @Validated
 @RequiredArgsConstructor
@@ -23,7 +27,7 @@ public class OrderController {
 
     @GetMapping("/orders")
     public String getOrders(Model model) {
-        final var orders = orderService.getOrders().stream()
+        final List<OrderDto> orders = orderService.getOrders().stream()
                 .map(orderMapper::toDto)
                 .toList();
 
@@ -37,7 +41,7 @@ public class OrderController {
             @RequestParam(defaultValue = "false") boolean newOrder,
             Model model
     ) {
-        final var order = orderService.getOrder(id)
+        final OrderDto order = orderService.getOrder(id)
                 .map(orderMapper::toDto)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
@@ -48,7 +52,7 @@ public class OrderController {
 
     @PostMapping("/buy")
     public String buy() {
-        final var order = orderService.createOrder();
+        final Order order = orderService.createOrder();
         return "redirect:/orders/" + order.getId() + "?newOrder=true";
     }
 }

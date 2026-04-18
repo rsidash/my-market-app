@@ -59,7 +59,7 @@ public class CartController {
     }
 
     private void populateCartModel(Model model) {
-        final var items = cartService.getCartItems().stream()
+        final List<ItemDto> items = cartService.getCartItems().stream()
                 .map(ci -> itemMapper.toDto(ci.getItem(), ci.getCount()))
                 .toList();
 

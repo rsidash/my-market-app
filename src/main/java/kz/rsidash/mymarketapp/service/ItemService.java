@@ -19,7 +19,7 @@ public class ItemService {
     private final ItemRepository itemRepository;
 
     public Page<Item> getItems(String search, SortType sortType, Pageable pageable) {
-        final var sortedPageable = PageRequest.of(
+        final PageRequest sortedPageable = PageRequest.of(
                 pageable.getPageNumber(),
                 pageable.getPageSize(),
                 toSort(sortType)

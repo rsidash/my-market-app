@@ -5,6 +5,7 @@ import kz.rsidash.mymarketapp.exception.NotFoundException;
 import kz.rsidash.mymarketapp.exception.ValidationException;
 import kz.rsidash.mymarketapp.model.cart.CartItem;
 import kz.rsidash.mymarketapp.model.enums.Action;
+import kz.rsidash.mymarketapp.model.item.Item;
 import kz.rsidash.mymarketapp.repostitory.CartItemRepository;
 import kz.rsidash.mymarketapp.repostitory.ItemRepository;
 import lombok.RequiredArgsConstructor;
@@ -43,10 +44,10 @@ public class CartService {
 
     @Transactional
     public CartItem changeItemQuantity(long itemId, Action action) {
-        final var item = itemRepository.findById(itemId)
+        final Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Item not found"));
 
-        var cartItem = cartItemRepository.findByItemId(itemId).orElse(null);
+        CartItem cartItem = cartItemRepository.findByItemId(itemId).orElse(null);
 
         if (Objects.isNull(cartItem) && (Action.MINUS == action || Action.DELETE == action)) {
             throw new ValidationException("Cannot modify non-existing cart item");

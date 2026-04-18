@@ -2,6 +2,7 @@ package kz.rsidash.mymarketapp.service;
 
 import jakarta.transaction.Transactional;
 import kz.rsidash.mymarketapp.exception.ValidationException;
+import kz.rsidash.mymarketapp.model.cart.CartItem;
 import kz.rsidash.mymarketapp.model.order.Order;
 import kz.rsidash.mymarketapp.model.order.OrderItem;
 import kz.rsidash.mymarketapp.repostitory.OrderRepository;
@@ -27,15 +28,15 @@ public class OrderService {
 
     @Transactional
     public Order createOrder() {
-        final var cartItems = cartService.getCartItems();
+        final List<CartItem> cartItems = cartService.getCartItems();
 
         if (cartItems.isEmpty()) {
             throw new ValidationException("Cart is empty");
         }
 
-        final var order = new Order();
+        final Order order = new Order();
 
-        final var orderItems = cartItems.stream()
+        final List<OrderItem> orderItems = cartItems.stream()
                 .map(ci -> {
                     var oi = new OrderItem();
                     oi.setOrder(order);
@@ -50,7 +51,7 @@ public class OrderService {
                 .mapToLong(ci -> ci.getItem().getPrice() * ci.getCount())
                 .sum());
 
-        final var saved = orderRepository.save(order);
+        final Order saved = orderRepository.save(order);
         cartService.clean();
         return saved;
     }
