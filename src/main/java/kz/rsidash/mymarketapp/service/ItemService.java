@@ -5,36 +5,34 @@ import kz.rsidash.mymarketapp.model.item.Item;
 import kz.rsidash.mymarketapp.repostitory.ItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.Optional;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
 public class ItemService {
     private final ItemRepository itemRepository;
 
-    public Page<Item> getItems(String search, SortType sortType, Pageable pageable) {
-        final PageRequest sortedPageable = PageRequest.of(
-                pageable.getPageNumber(),
-                pageable.getPageSize(),
-                toSort(sortType)
-        );
+    public Flux<Item> getItems(String search, SortType sortType) {
+        Sort sort = toSort(sortType);
 
         if (StringUtils.isNoneBlank(search)) {
-            return itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-                    search, search, sortedPageable
-            );
+            return itemRepository
+                    .findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
+                            search, search
+                    )
+                    .sort(sortComparator(sort));
         }
 
-        return itemRepository.findAll(sortedPageable);
+        return itemRepository.findAll()
+                .sort(sortComparator(sort));
     }
 
-    public Optional<Item> getItem(Long id) {
+    public Mono<Item> getItem(Long id) {
         return itemRepository.findById(id);
     }
 
@@ -43,6 +41,21 @@ public class ItemService {
             case ALPHA -> Sort.by("title");
             case PRICE -> Sort.by("price");
             default -> Sort.unsorted();
+        };
+    }
+
+    private Comparator<Item> sortComparator(Sort sort) {
+        return (a, b) -> {
+            if (sort.isSorted()) {
+                String property = sort.iterator().next().getProperty();
+
+                return switch (property) {
+                    case "title" -> a.getTitle().compareToIgnoreCase(b.getTitle());
+                    case "price" -> Long.compare(a.getPrice(), b.getPrice());
+                    default -> 0;
+                };
+            }
+            return 0;
         };
     }
 }

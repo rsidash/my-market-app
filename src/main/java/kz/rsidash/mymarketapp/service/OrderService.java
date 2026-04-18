@@ -1,58 +1,69 @@
 package kz.rsidash.mymarketapp.service;
 
-import jakarta.transaction.Transactional;
 import kz.rsidash.mymarketapp.exception.ValidationException;
-import kz.rsidash.mymarketapp.model.cart.CartItem;
 import kz.rsidash.mymarketapp.model.order.Order;
 import kz.rsidash.mymarketapp.model.order.OrderItem;
+import kz.rsidash.mymarketapp.repostitory.ItemRepository;
+import kz.rsidash.mymarketapp.repostitory.OrderItemRepository;
 import kz.rsidash.mymarketapp.repostitory.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Optional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @Service
 @RequiredArgsConstructor
 public class OrderService {
+    private final ItemRepository itemRepository;
     private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
     private final CartService cartService;
 
-    public List<Order> getOrders() {
+    public Flux<Order> getOrders() {
         return orderRepository.findAll();
     }
 
-    public Optional<Order> getOrder(long id) {
+    public Mono<Order> getOrder(long id) {
         return orderRepository.findById(id);
     }
 
-    @Transactional
-    public Order createOrder() {
-        final List<CartItem> cartItems = cartService.getCartItems();
+    public Mono<Order> createOrder() {
+        return cartService.getCartItems()
+                .collectList()
+                .flatMap(cartItems -> {
+                    if (cartItems.isEmpty()) {
+                        return Mono.error(new ValidationException("Cart is empty"));
+                    }
 
-        if (cartItems.isEmpty()) {
-            throw new ValidationException("Cart is empty");
-        }
+                    return Flux.fromIterable(cartItems)
+                            .flatMap(ci ->
+                                    itemRepository.findById(ci.getItemId())
+                                            .map(item -> item.getPrice() * ci.getCount())
+                            )
+                            .reduce(0L, Long::sum)
+                            .map(total -> {
+                                Order order = new Order();
+                                order.setTotalSum(total);
+                                return order;
+                            })
+                            .flatMap(orderRepository::save)
+                            .flatMap(savedOrder ->
+                                    Flux.fromIterable(cartItems)
+                                            .map(ci -> {
+                                                OrderItem oi = new OrderItem();
+                                                oi.setOrderId(savedOrder.getId());
+                                                oi.setItemId(ci.getItemId());
+                                                oi.setCount(ci.getCount());
+                                                return oi;
+                                            })
+                                            .flatMap(orderItemRepository::save)
+                                            .then(cartService.clean())
+                                            .thenReturn(savedOrder)
+                            );
+                });
+    }
 
-        final Order order = new Order();
-
-        final List<OrderItem> orderItems = cartItems.stream()
-                .map(ci -> {
-                    var oi = new OrderItem();
-                    oi.setOrder(order);
-                    oi.setItem(ci.getItem());
-                    oi.setCount(ci.getCount());
-                    return oi;
-                })
-                .toList();
-
-        order.setItems(orderItems);
-        order.setTotalSum(cartItems.stream()
-                .mapToLong(ci -> ci.getItem().getPrice() * ci.getCount())
-                .sum());
-
-        final Order saved = orderRepository.save(order);
-        cartService.clean();
-        return saved;
+    public Flux<OrderItem> getOrderItems(Long orderId) {
+        return orderItemRepository.findByOrderId(orderId);
     }
 }

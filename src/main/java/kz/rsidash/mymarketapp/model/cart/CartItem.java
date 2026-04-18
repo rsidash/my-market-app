@@ -1,32 +1,21 @@
 package kz.rsidash.mymarketapp.model.cart;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
-import kz.rsidash.mymarketapp.model.item.Item;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Entity
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "cart-item")
+@Table("cart-item")
 public class CartItem {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "cart_id")
-    private Cart cart;
+    private Long cartId;
 
-    @NotNull
-    @ManyToOne
-    @JoinColumn(name = "item_id")
-    private Item item;
+    private Long itemId;
 
-    @Positive
-    @Column(name = "count")
     private int count;
 }
