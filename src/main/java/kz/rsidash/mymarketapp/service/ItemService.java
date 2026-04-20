@@ -2,7 +2,7 @@ package kz.rsidash.mymarketapp.service;
 
 import kz.rsidash.mymarketapp.model.enums.SortType;
 import kz.rsidash.mymarketapp.model.item.Item;
-import kz.rsidash.mymarketapp.repostitory.ItemRepository;
+import kz.rsidash.mymarketapp.repository.ItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Sort;

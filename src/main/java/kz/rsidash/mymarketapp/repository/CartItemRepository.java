@@ -1,4 +1,4 @@
-package kz.rsidash.mymarketapp.repostitory;
+package kz.rsidash.mymarketapp.repository;
 
 import kz.rsidash.mymarketapp.model.cart.CartItem;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;

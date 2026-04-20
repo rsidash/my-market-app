@@ -4,7 +4,7 @@ import jakarta.validation.constraints.Positive;
 import kz.rsidash.mymarketapp.dto.order.mapper.OrderItemMapper;
 import kz.rsidash.mymarketapp.dto.order.mapper.OrderMapper;
 import kz.rsidash.mymarketapp.model.item.Item;
-import kz.rsidash.mymarketapp.repostitory.ItemRepository;
+import kz.rsidash.mymarketapp.repository.ItemRepository;
 import kz.rsidash.mymarketapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

@@ -7,7 +7,7 @@ import kz.rsidash.mymarketapp.dto.order.mapper.OrderMapper;
 import kz.rsidash.mymarketapp.model.item.Item;
 import kz.rsidash.mymarketapp.model.order.Order;
 import kz.rsidash.mymarketapp.model.order.OrderItem;
-import kz.rsidash.mymarketapp.repostitory.ItemRepository;
+import kz.rsidash.mymarketapp.repository.ItemRepository;
 import kz.rsidash.mymarketapp.service.OrderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

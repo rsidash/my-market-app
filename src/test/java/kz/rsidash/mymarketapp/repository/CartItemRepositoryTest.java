@@ -1,7 +1,6 @@
 package kz.rsidash.mymarketapp.repository;
 
 import kz.rsidash.mymarketapp.model.cart.CartItem;
-import kz.rsidash.mymarketapp.repostitory.CartItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

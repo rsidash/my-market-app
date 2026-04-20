@@ -2,8 +2,6 @@ package kz.rsidash.mymarketapp.repository;
 
 import kz.rsidash.mymarketapp.model.order.Order;
 import kz.rsidash.mymarketapp.model.order.OrderItem;
-import kz.rsidash.mymarketapp.repostitory.OrderItemRepository;
-import kz.rsidash.mymarketapp.repostitory.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

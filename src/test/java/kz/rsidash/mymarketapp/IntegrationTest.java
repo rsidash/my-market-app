@@ -1,10 +1,10 @@
 package kz.rsidash.mymarketapp;
 
 import kz.rsidash.mymarketapp.model.item.Item;
-import kz.rsidash.mymarketapp.repostitory.CartItemRepository;
-import kz.rsidash.mymarketapp.repostitory.ItemRepository;
-import kz.rsidash.mymarketapp.repostitory.OrderItemRepository;
-import kz.rsidash.mymarketapp.repostitory.OrderRepository;
+import kz.rsidash.mymarketapp.repository.CartItemRepository;
+import kz.rsidash.mymarketapp.repository.ItemRepository;
+import kz.rsidash.mymarketapp.repository.OrderItemRepository;
+import kz.rsidash.mymarketapp.repository.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
