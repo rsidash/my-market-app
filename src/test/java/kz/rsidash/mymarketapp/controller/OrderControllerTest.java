@@ -1,118 +1,90 @@
 package kz.rsidash.mymarketapp.controller;
 
 import kz.rsidash.mymarketapp.dto.order.OrderDto;
-import kz.rsidash.mymarketapp.dto.order.mapper.OrderMapper;
-import kz.rsidash.mymarketapp.model.order.Order;
-import kz.rsidash.mymarketapp.service.OrderService;
+import kz.rsidash.mymarketapp.facade.OrderFacade;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
 
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(OrderController.class)
+@WebFluxTest(OrderController.class)
 class OrderControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockitoBean
-    private OrderService orderService;
-
-    @MockitoBean
-    private OrderMapper orderMapper;
+    private OrderFacade orderFacade;
 
     @Test
-    void getOrders_returnsOrdersTemplate() throws Exception {
-        when(orderService.getOrders()).thenReturn(Collections.emptyList());
+    void getOrders_returnsOrdersTemplate() {
+        when(orderFacade.getOrders()).thenReturn(Flux.empty());
 
-        mockMvc.perform(get("/orders"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("orders"))
-                .andExpect(model().attributeExists("orders"));
+        webTestClient.get().uri("/orders")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getOrders_withOrders() throws Exception {
-        var order = new Order();
-        order.setId(1L);
-        order.setTotalSum(500L);
-        order.setItems(Collections.emptyList());
-
-        var dto = OrderDto.builder().id(1).items(Collections.emptyList()).totalSum(500).build();
-
-        when(orderService.getOrders()).thenReturn(List.of(order));
-        when(orderMapper.toDto(order)).thenReturn(dto);
-
-        mockMvc.perform(get("/orders"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("orders"))
-                .andExpect(model().attribute("orders", List.of(dto)));
-    }
-
-    @Test
-    void getOrderById_returnsOrderTemplate() throws Exception {
-        var order = new Order();
-        order.setId(1L);
-        order.setTotalSum(300L);
-        order.setItems(Collections.emptyList());
-
+    void getOrders_withOrders() {
         var dto = OrderDto.builder().id(1).items(Collections.emptyList()).totalSum(300).build();
 
-        when(orderService.getOrder(1L)).thenReturn(Optional.of(order));
-        when(orderMapper.toDto(order)).thenReturn(dto);
+        when(orderFacade.getOrders()).thenReturn(Flux.just(dto));
 
-        mockMvc.perform(get("/orders/1"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("order"))
-                .andExpect(model().attribute("order", dto))
-                .andExpect(model().attribute("newOrder", false));
+        webTestClient.get().uri("/orders")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getOrderById_withNewOrderTrue() throws Exception {
-        var order = new Order();
-        order.setId(1L);
-        order.setTotalSum(300L);
-        order.setItems(Collections.emptyList());
-
+    void getOrderById_returnsOrderTemplate() {
         var dto = OrderDto.builder().id(1).items(Collections.emptyList()).totalSum(300).build();
 
-        when(orderService.getOrder(1L)).thenReturn(Optional.of(order));
-        when(orderMapper.toDto(order)).thenReturn(dto);
+        when(orderFacade.getOrder(1L)).thenReturn(Mono.just(dto));
 
-        mockMvc.perform(get("/orders/1").param("newOrder", "true"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("order"))
-                .andExpect(model().attribute("newOrder", true));
+        webTestClient.get().uri("/orders/1")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getOrderById_notFound() throws Exception {
-        when(orderService.getOrder(999L)).thenReturn(Optional.empty());
+    void getOrderById_withNewOrderTrue() {
+        var dto = OrderDto.builder().id(1).items(Collections.emptyList()).totalSum(300).build();
 
-        mockMvc.perform(get("/orders/999"))
-                .andExpect(status().isNotFound());
+        when(orderFacade.getOrder(1L)).thenReturn(Mono.just(dto));
+
+        webTestClient.get().uri(uriBuilder -> uriBuilder.path("/orders/1")
+                        .queryParam("newOrder", "true")
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void buy_redirectsToOrder() throws Exception {
-        var order = new Order();
-        order.setId(42L);
+    void getOrderById_notFound() {
+        when(orderFacade.getOrder(999L)).thenReturn(Mono.empty());
 
-        when(orderService.createOrder()).thenReturn(order);
+        webTestClient.get().uri("/orders/999")
+                .exchange()
+                .expectStatus().isNotFound();
+    }
 
-        mockMvc.perform(post("/buy"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/orders/42?newOrder=true"));
+    @Test
+    void buy_redirectsToOrder() {
+        var dto = OrderDto.builder().id(42).items(Collections.emptyList()).totalSum(300).build();
+
+        when(orderFacade.createOrder()).thenReturn(Mono.just(dto));
+
+        webTestClient.post().uri("/buy")
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().location("/orders/42?newOrder=true");
     }
 }

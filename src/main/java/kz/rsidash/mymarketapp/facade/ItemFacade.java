@@ -10,60 +10,73 @@ import kz.rsidash.mymarketapp.model.item.Item;
 import kz.rsidash.mymarketapp.service.CartService;
 import kz.rsidash.mymarketapp.service.ItemService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
 public class ItemFacade {
+
     private final ItemService itemService;
     private final CartService cartService;
     private final ItemMapper itemMapper;
 
-    public ItemListView getItems(
+    public Mono<ItemListView> getItems(
             String search,
             SortType sortType,
             int pageNumber,
             int pageSize
     ) {
-        final Page<Item> itemPage = itemService.getItems(
-                search,
-                sortType,
-                PageRequest.of(pageNumber, pageSize)
-        );
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, sortType.toSort());
 
-        final Map<Long, Integer> cartMap = cartService.getCartItemsCountMap();
+        Mono<Map<Long, Integer>> cartMapMono = cartService.getCartItemsCountMap();
 
-        final List<ItemDto> items = itemPage.map(i ->
-                itemMapper.toDto(i, cartMap.getOrDefault(i.getId(), 0))
-        ).getContent();
+        return itemService.getItems(search, pageable)
+                .collectList()
+                .zipWith(cartMapMono)
+                .map(tuple -> {
 
-        return ItemListView.builder()
-                .items(items)
-                .sort(sortType)
-                .search(search)
-                .paging(Paging.builder()
-                        .pageSize(itemPage.getSize())
-                        .pageNumber(itemPage.getNumber() + 1)
-                        .hasPrevious(itemPage.hasPrevious())
-                        .hasNext(itemPage.hasNext())
-                        .build())
-                .build();
+                    List<Item> items = tuple.getT1();
+                    Map<Long, Integer> cartMap = tuple.getT2();
+
+                    List<ItemDto> itemDtos = items.stream()
+                            .map(i -> itemMapper.toDto(
+                                    i,
+                                    cartMap.getOrDefault(i.getId(), 0)
+                            ))
+                            .toList();
+
+                    return ItemListView.builder()
+                            .items(itemDtos)
+                            .sort(sortType)
+                            .search(search)
+                            .paging(Paging.builder()
+                                    .pageSize(pageSize)
+                                    .pageNumber(pageNumber + 1)
+                                    .hasPrevious(pageNumber > 0)
+                                    .hasNext(items.size() == pageSize)
+                                    .build())
+                            .build();
+                });
     }
 
-    public Optional<ItemDto> getItem(Long id) {
+    public Mono<ItemDto> getItem(Long id) {
         return itemService.getItem(id)
-                .map(i -> {
-                    final Integer count = cartService.getCartItem(id)
-                            .map(CartItem::getCount)
-                            .orElse(0);
+                .zipWith(
+                        cartService.getCartItem(id)
+                                .map(CartItem::getCount)
+                                .defaultIfEmpty(0)
+                )
+                .map(tuple -> {
+                    Item item = tuple.getT1();
+                    int count = tuple.getT2();
 
-                    return itemMapper.toDto(i, count);
+                    return itemMapper.toDto(item, count);
                 });
     }
 }

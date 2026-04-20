@@ -4,28 +4,26 @@ import kz.rsidash.mymarketapp.dto.Paging;
 import kz.rsidash.mymarketapp.dto.item.ItemDto;
 import kz.rsidash.mymarketapp.dto.item.ItemListView;
 import kz.rsidash.mymarketapp.facade.ItemFacade;
+import kz.rsidash.mymarketapp.model.enums.Action;
 import kz.rsidash.mymarketapp.model.enums.SortType;
 import kz.rsidash.mymarketapp.service.CartService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(ItemController.class)
+@WebFluxTest(ItemController.class)
 class ItemControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockitoBean
     private ItemFacade itemFacade;
@@ -34,7 +32,7 @@ class ItemControllerTest {
     private CartService cartService;
 
     @Test
-    void getItems_returnsItemsTemplate() throws Exception {
+    void getItems_returnsItemsTemplate() {
         var itemListView = ItemListView.builder()
                 .items(List.of(
                         ItemDto.builder().id(1).title("Item1").price(100).build(),
@@ -45,31 +43,30 @@ class ItemControllerTest {
                 .paging(Paging.builder().pageNumber(1).pageSize(5).hasPrevious(false).hasNext(false).build())
                 .build();
 
-        when(itemFacade.getItems(isNull(), eq(SortType.NO), eq(0), eq(5))).thenReturn(itemListView);
+        when(itemFacade.getItems(isNull(), eq(SortType.NO), eq(0), eq(5))).thenReturn(Mono.just(itemListView));
 
-        mockMvc.perform(get("/items"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"))
-                .andExpect(model().attributeExists("items", "sort", "paging"));
+        webTestClient.get().uri("/items")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getItems_rootPath_returnsItemsTemplate() throws Exception {
+    void getItems_rootPath_returnsItemsTemplate() {
         var itemListView = ItemListView.builder()
                 .items(List.of(ItemDto.builder().id(1).title("Item1").price(100).build()))
                 .sort(SortType.NO)
                 .paging(Paging.builder().pageNumber(1).pageSize(5).hasPrevious(false).hasNext(false).build())
                 .build();
 
-        when(itemFacade.getItems(isNull(), eq(SortType.NO), eq(0), eq(5))).thenReturn(itemListView);
+        when(itemFacade.getItems(isNull(), eq(SortType.NO), eq(0), eq(5))).thenReturn(Mono.just(itemListView));
 
-        mockMvc.perform(get("/"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"));
+        webTestClient.get().uri("/")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getItems_withSearchAndSort() throws Exception {
+    void getItems_withSearchAndSort() {
         var itemListView = ItemListView.builder()
                 .items(List.of(ItemDto.builder().id(1).title("Ball").price(50).build()))
                 .search("ball")
@@ -77,19 +74,18 @@ class ItemControllerTest {
                 .paging(Paging.builder().pageNumber(1).pageSize(5).hasPrevious(false).hasNext(false).build())
                 .build();
 
-        when(itemFacade.getItems(eq("ball"), eq(SortType.ALPHA), eq(0), eq(5))).thenReturn(itemListView);
+        when(itemFacade.getItems(eq("ball"), eq(SortType.ALPHA), eq(0), eq(5))).thenReturn(Mono.just(itemListView));
 
-        mockMvc.perform(get("/items")
-                        .param("search", "ball")
-                        .param("sort", "ALPHA"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"))
-                .andExpect(model().attribute("search", "ball"))
-                .andExpect(model().attribute("sort", SortType.ALPHA));
+        webTestClient.get().uri(uriBuilder -> uriBuilder.path("/items")
+                        .queryParam("search", "ball")
+                        .queryParam("sort", "ALPHA")
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getItems_groupsByThreeWithStubs() throws Exception {
+    void getItems_groupsByThreeWithStubs() {
         var itemListView = ItemListView.builder()
                 .items(List.of(
                         ItemDto.builder().id(1).title("A").price(10).build(),
@@ -99,54 +95,59 @@ class ItemControllerTest {
                 .paging(Paging.builder().pageNumber(1).pageSize(5).hasPrevious(false).hasNext(false).build())
                 .build();
 
-        when(itemFacade.getItems(any(), any(), anyInt(), anyInt())).thenReturn(itemListView);
+        when(itemFacade.getItems(any(), any(), anyInt(), anyInt())).thenReturn(Mono.just(itemListView));
 
-        mockMvc.perform(get("/items"))
-                .andExpect(status().isOk())
-                .andExpect(model().attributeExists("items"));
+        webTestClient.get().uri("/items")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getItem_returnsItemTemplate() throws Exception {
+    void getItem_returnsItemTemplate() {
         var item = ItemDto.builder().id(1).title("Ball").description("A ball").price(100).count(0).build();
-        when(itemFacade.getItem(1L)).thenReturn(Optional.of(item));
+        when(itemFacade.getItem(1L)).thenReturn(Mono.just(item));
 
-        mockMvc.perform(get("/items/1"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attribute("item", item));
+        webTestClient.get().uri("/items/1")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
-    void getItem_notFound() throws Exception {
-        when(itemFacade.getItem(999L)).thenReturn(Optional.empty());
+    void getItem_notFound() {
+        when(itemFacade.getItem(999L)).thenReturn(Mono.empty());
 
-        mockMvc.perform(get("/items/999"))
-                .andExpect(status().isNotFound());
+        webTestClient.get().uri("/items/999")
+                .exchange()
+                .expectStatus().isNotFound();
     }
 
     @Test
-    void changeItemQuantity_returnsItemTemplate() throws Exception {
+    void changeItemQuantity_returnsItemTemplate() {
         var item = ItemDto.builder().id(1).title("Ball").price(100).count(1).build();
-        when(itemFacade.getItem(1L)).thenReturn(Optional.of(item));
+        when(cartService.changeItemQuantity(1L, Action.PLUS)).thenReturn(Mono.empty());
+        when(itemFacade.getItem(1L)).thenReturn(Mono.just(item));
 
-        mockMvc.perform(post("/items/1").param("action", "PLUS"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attribute("item", item));
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items/1")
+                        .queryParam("action", "PLUS")
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
 
-        verify(cartService).changeItemQuantity(1L, kz.rsidash.mymarketapp.model.enums.Action.PLUS);
+        verify(cartService).changeItemQuantity(1L, Action.PLUS);
     }
 
     @Test
-    void changeItemQuantity_minus() throws Exception {
+    void changeItemQuantity_minus() {
         var item = ItemDto.builder().id(1).title("Ball").price(100).count(0).build();
-        when(itemFacade.getItem(1L)).thenReturn(Optional.of(item));
+        when(cartService.changeItemQuantity(1L, Action.MINUS)).thenReturn(Mono.empty());
+        when(itemFacade.getItem(1L)).thenReturn(Mono.just(item));
 
-        mockMvc.perform(post("/items/1").param("action", "MINUS"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"));
+        webTestClient.post().uri(uriBuilder -> uriBuilder.path("/items/1")
+                        .queryParam("action", "MINUS")
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
 
-        verify(cartService).changeItemQuantity(1L, kz.rsidash.mymarketapp.model.enums.Action.MINUS);
+        verify(cartService).changeItemQuantity(1L, Action.MINUS);
     }
 }

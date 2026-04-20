@@ -1,10 +1,7 @@
 package kz.rsidash.mymarketapp.controller;
 
 import jakarta.validation.constraints.Positive;
-import kz.rsidash.mymarketapp.dto.order.OrderDto;
-import kz.rsidash.mymarketapp.dto.order.mapper.OrderMapper;
-import kz.rsidash.mymarketapp.model.order.Order;
-import kz.rsidash.mymarketapp.service.OrderService;
+import kz.rsidash.mymarketapp.facade.OrderFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
@@ -15,44 +12,46 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.util.List;
+import reactor.core.publisher.Mono;
 
 @Controller
 @Validated
 @RequiredArgsConstructor
 public class OrderController {
-    private final OrderService orderService;
-    private final OrderMapper orderMapper;
+    private final OrderFacade orderFacade;
 
     @GetMapping("/orders")
-    public String getOrders(Model model) {
-        final List<OrderDto> orders = orderService.getOrders().stream()
-                .map(orderMapper::toDto)
-                .toList();
-
-        model.addAttribute("orders", orders);
-        return "orders";
+    public Mono<String> getOrders(Model model) {
+        return orderFacade.getOrders()
+                .collectList()
+                .map(orders -> {
+                    model.addAttribute("orders", orders);
+                    return "orders";
+                });
     }
 
     @GetMapping("/orders/{id}")
-    public String getOrderById(
+    public Mono<String> getOrderById(
             @PathVariable @Positive long id,
             @RequestParam(defaultValue = "false") boolean newOrder,
             Model model
     ) {
-        final OrderDto order = orderService.getOrder(id)
-                .map(orderMapper::toDto)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-
-        model.addAttribute("order", order);
-        model.addAttribute("newOrder", newOrder);
-        return "order";
+        return orderFacade.getOrder(id)
+                .switchIfEmpty(Mono.error(
+                        new ResponseStatusException(HttpStatus.NOT_FOUND)
+                ))
+                .map(order -> {
+                    model.addAttribute("order", order);
+                    model.addAttribute("newOrder", newOrder);
+                    return "order";
+                });
     }
 
     @PostMapping("/buy")
-    public String buy() {
-        final Order order = orderService.createOrder();
-        return "redirect:/orders/" + order.getId() + "?newOrder=true";
+    public Mono<String> buy() {
+        return orderFacade.createOrder()
+                .map(order ->
+                        "redirect:/orders/" + order.getId() + "?newOrder=true"
+                );
     }
 }
