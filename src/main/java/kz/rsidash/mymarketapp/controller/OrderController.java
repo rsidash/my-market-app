@@ -1,9 +1,11 @@
 package kz.rsidash.mymarketapp.controller;
 
 import jakarta.validation.constraints.Positive;
+import kz.rsidash.mymarketapp.dto.order.OrderDto;
 import kz.rsidash.mymarketapp.dto.order.mapper.OrderItemMapper;
 import kz.rsidash.mymarketapp.dto.order.mapper.OrderMapper;
 import kz.rsidash.mymarketapp.model.item.Item;
+import kz.rsidash.mymarketapp.model.order.Order;
 import kz.rsidash.mymarketapp.repository.ItemRepository;
 import kz.rsidash.mymarketapp.service.OrderService;
 import lombok.RequiredArgsConstructor;
@@ -30,14 +32,7 @@ public class OrderController {
     @GetMapping("/orders")
     public Mono<String> getOrders(Model model) {
         return orderService.getOrders()
-                .flatMap(order ->
-                        orderService.getOrderItems(order.getId())
-                                .flatMap(oi -> itemRepository.findById(oi.getItemId())
-                                        .defaultIfEmpty(new Item())
-                                        .map(item -> orderItemMapper.toDto(oi, item)))
-                                .collectList()
-                                .map(items -> orderMapper.toDto(order, items))
-                )
+                .flatMap(this::enrichOrder)
                 .collectList()
                 .map(orders -> {
                     model.addAttribute("orders", orders);
@@ -52,14 +47,7 @@ public class OrderController {
             Model model
     ) {
         return orderService.getOrder(id)
-                .flatMap(order ->
-                        orderService.getOrderItems(order.getId())
-                                .flatMap(oi -> itemRepository.findById(oi.getItemId())
-                                        .defaultIfEmpty(new Item())
-                                        .map(item -> orderItemMapper.toDto(oi, item)))
-                                .collectList()
-                                .map(items -> orderMapper.toDto(order, items))
-                )
+                .flatMap(this::enrichOrder)
                 .switchIfEmpty(Mono.error(
                         new ResponseStatusException(HttpStatus.NOT_FOUND)
                 ))
@@ -76,5 +64,14 @@ public class OrderController {
                 .map(order ->
                         "redirect:/orders/" + order.getId() + "?newOrder=true"
                 );
+    }
+
+    private Mono<OrderDto> enrichOrder(Order order) {
+        return orderService.getOrderItems(order.getId())
+                .flatMap(oi -> itemRepository.findById(oi.getItemId())
+                        .defaultIfEmpty(new Item())
+                        .map(item -> orderItemMapper.toDto(oi, item)))
+                .collectList()
+                .map(items -> orderMapper.toDto(order, items));
     }
 }
