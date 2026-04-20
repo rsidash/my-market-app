@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.r2dbc.test.autoconfigure.DataR2dbcTest;
+import org.springframework.data.domain.PageRequest;
 import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,21 +57,21 @@ class ItemRepositoryTest {
 
     @Test
     void searchByTitle_caseInsensitive() {
-        StepVerifier.create(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("ball", "ball"))
+        StepVerifier.create(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("ball", "ball", PageRequest.of(0, 10)))
                 .assertNext(i -> assertThat(i.getTitle()).isEqualTo("Ball"))
                 .verifyComplete();
     }
 
     @Test
     void searchByDescription() {
-        StepVerifier.create(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("rubber", "rubber"))
+        StepVerifier.create(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("rubber", "rubber", PageRequest.of(0, 10)))
                 .assertNext(i -> assertThat(i.getTitle()).isEqualTo("Ball"))
                 .verifyComplete();
     }
 
     @Test
     void searchNoMatch() {
-        StepVerifier.create(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("xyz", "xyz"))
+        StepVerifier.create(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("xyz", "xyz", PageRequest.of(0, 10)))
                 .verifyComplete();
     }
 }

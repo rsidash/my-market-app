@@ -8,6 +8,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -26,13 +28,13 @@ class ItemServiceTest {
 
     @Test
     void getItems_noSearch_callsFindAll() {
-        when(itemRepository.findAll()).thenReturn(Flux.empty());
+        when(itemRepository.findAll(SortType.NO.toSort())).thenReturn(Flux.empty());
 
-        StepVerifier.create(itemService.getItems(null, SortType.NO))
+        StepVerifier.create(itemService.getItems(null, PageRequest.of(0, 10, SortType.NO.toSort())))
                 .verifyComplete();
 
-        verify(itemRepository).findAll();
-        verify(itemRepository, never()).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(any(), any());
+        verify(itemRepository).findAll(SortType.NO.toSort());
+        verify(itemRepository, never()).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(any(), any(), any());
     }
 
     @Test
@@ -42,24 +44,24 @@ class ItemServiceTest {
         item.setTitle("Ball");
         item.setPrice(100);
 
-        when(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("ball", "ball"))
+        when(itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("ball", "ball", PageRequest.of(0, 10, SortType.NO.toSort())))
                 .thenReturn(Flux.just(item));
 
-        StepVerifier.create(itemService.getItems("ball", SortType.NO))
+        StepVerifier.create(itemService.getItems("ball", PageRequest.of(0, 10, SortType.NO.toSort())))
                 .expectNextCount(1)
                 .verifyComplete();
 
-        verify(itemRepository).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("ball", "ball");
+        verify(itemRepository).findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("ball", "ball", PageRequest.of(0, 10, SortType.NO.toSort()));
     }
 
     @Test
     void getItems_blankSearch_callsFindAll() {
-        when(itemRepository.findAll()).thenReturn(Flux.empty());
+        when(itemRepository.findAll(SortType.NO.toSort())).thenReturn(Flux.empty());
 
-        StepVerifier.create(itemService.getItems("  ", SortType.NO))
+        StepVerifier.create(itemService.getItems("  ", PageRequest.of(0, 10, SortType.NO.toSort())))
                 .verifyComplete();
 
-        verify(itemRepository).findAll();
+        verify(itemRepository).findAll(SortType.NO.toSort());
     }
 
     @Test
@@ -74,9 +76,9 @@ class ItemServiceTest {
         itemA.setTitle("Apple");
         itemA.setPrice(50);
 
-        when(itemRepository.findAll()).thenReturn(Flux.just(itemB, itemA));
+        when(itemRepository.findAll(SortType.ALPHA.toSort())).thenReturn(Flux.just(itemA, itemB));
 
-        StepVerifier.create(itemService.getItems(null, SortType.ALPHA))
+        StepVerifier.create(itemService.getItems(null, PageRequest.of(0, 10, SortType.ALPHA.toSort())))
                 .assertNext(i -> assertThat(i.getTitle()).isEqualTo("Apple"))
                 .assertNext(i -> assertThat(i.getTitle()).isEqualTo("Bat"))
                 .verifyComplete();
@@ -94,9 +96,9 @@ class ItemServiceTest {
         cheap.setTitle("Ball");
         cheap.setPrice(50);
 
-        when(itemRepository.findAll()).thenReturn(Flux.just(expensive, cheap));
+        when(itemRepository.findAll(SortType.PRICE.toSort())).thenReturn(Flux.just(cheap, expensive));
 
-        StepVerifier.create(itemService.getItems(null, SortType.PRICE))
+        StepVerifier.create(itemService.getItems(null, PageRequest.of(0, 10, SortType.PRICE.toSort())))
                 .assertNext(i -> assertThat(i.getPrice()).isEqualTo(50))
                 .assertNext(i -> assertThat(i.getPrice()).isEqualTo(200))
                 .verifyComplete();

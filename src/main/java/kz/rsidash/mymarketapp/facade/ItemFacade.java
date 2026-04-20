@@ -10,6 +10,8 @@ import kz.rsidash.mymarketapp.model.item.Item;
 import kz.rsidash.mymarketapp.service.CartService;
 import kz.rsidash.mymarketapp.service.ItemService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -30,12 +32,11 @@ public class ItemFacade {
             int pageNumber,
             int pageSize
     ) {
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, sortType.toSort());
 
         Mono<Map<Long, Integer>> cartMapMono = cartService.getCartItemsCountMap();
 
-        return itemService.getItems(search, sortType)
-                .skip((long) pageNumber * pageSize)
-                .take(pageSize)
+        return itemService.getItems(search, pageable)
                 .collectList()
                 .zipWith(cartMapMono)
                 .map(tuple -> {
